@@ -1,30 +1,96 @@
-export type StatKey = "tech" | "stress" | "health" | "loyalty" | "reputation" | "money";
-export type JobLevel = "MNS" | "SNS" | "ZAVLAB" | "DIRECTOR";
-
-export type Flags = Record<string, boolean | string>;
-export type Counters = {
-  age: number;
-  yearsOfService: number;
-  jobLevel: JobLevel;
-  clearance: number;
-};
+export type StatKey = "intellect" | "discipline" | "social" | "stress" | "loyalty" | "health";
+export type JobKey = "junior" | "engineer" | "senior" | "lead";
+export type EventCategory = "work" | "learning" | "social" | "risk" | "health" | "career" | "inspection";
+export type EventKind = "regular" | "milestone" | "crisis" | "inspection";
 
 export type Stats = Record<StatKey, number>;
 
-export type GameState = {
-  stats: Stats;
-  counters: Counters;
-  flags: Flags;
-  turn: number;
-  mode: "event" | "reveal" | "ended";
-  eventId: string | null;
-  nextEventId: string | null;
-  eventSeed: string | null;
-  seenEvents: string[];
-  cooldowns: Record<string, number>;
-  resolution: Resolution | null;
-  gameOver: boolean;
-  ending?: string;
+export type ResourceState = {
+  money: number;
+  age: number;
+  serviceQuarters: number;
+  suspicionRisk: number;
+  job: JobKey;
+};
+
+export type CheckDefinition = {
+  stat: StatKey;
+  dc: number;
+  difficultyLabel?: string;
+};
+
+export type CheckResult = {
+  stat: StatKey;
+  roll: number;
+  modifier: number;
+  total: number;
+  dc: number;
+  success: boolean;
+  difficultyLabel?: string;
+};
+
+export type EffectPayload = {
+  title?: string;
+  detail?: string;
+  stats?: Partial<Record<StatKey, number>>;
+  resources?: Partial<Record<"money" | "suspicionRisk", number>>;
+  setFlags?: string[];
+  clearFlags?: string[];
+  addTimedEffects?: TimedEffect[];
+  removeTimedEffects?: string[];
+  addPerks?: string[];
+  setJob?: JobKey;
+  endGame?: string;
+};
+
+export type EventOption = {
+  id: string;
+  label: string;
+  summary: string;
+  check?: CheckDefinition;
+  onPick?: EffectPayload;
+  onSuccess?: EffectPayload;
+  onFailure?: EffectPayload;
+};
+
+export type EventConditions = {
+  minAge?: number;
+  maxAge?: number;
+  minServiceQuarters?: number;
+  maxServiceQuarters?: number;
+  jobs?: JobKey[];
+  statMin?: Partial<Record<StatKey, number>>;
+  statMax?: Partial<Record<StatKey, number>>;
+  minSuspicionRisk?: number;
+  maxSuspicionRisk?: number;
+  hasFlags?: string[];
+  missingFlags?: string[];
+  hasPerks?: string[];
+  seenEvent?: string;
+};
+
+export type EventCard = {
+  id: string;
+  title: string;
+  category: EventCategory;
+  kind?: EventKind;
+  text: string;
+  weight?: number;
+  cooldown?: number;
+  once?: boolean;
+  priority?: number;
+  conditions?: EventConditions;
+  options: EventOption[];
+};
+
+export type TimedEffect = {
+  id: string;
+  label: string;
+  duration: number;
+  visible?: boolean;
+  perTurn?: EffectPayload;
+  checkBonuses?: Partial<Record<StatKey, number>>;
+  categoryWeights?: Partial<Record<EventCategory | "inspection" | "crisis", number>>;
 };
 
 export type Resolution = {
@@ -33,58 +99,23 @@ export type Resolution = {
   changes: string[];
 };
 
-export type Conditions = {
-  minAge?: number;
-  maxAge?: number;
-  minYearsOfService?: number;
-  maxYearsOfService?: number;
-  jobLevel?: JobLevel | JobLevel[];
-  statMin?: Partial<Stats>;
-  statMax?: Partial<Stats>;
-  flags?: Record<string, boolean | string>;
-  notFlags?: Record<string, boolean | string>;
-  seenEvent?: string;
-};
+export type UIMode = "event" | "reveal" | "upgrade" | "ended";
 
-export type StatDelta = Partial<Record<StatKey, number>>;
-
-export type ChoiceEffect = {
-  stats?: StatDelta;
-  age?: number;
-  yearsOfService?: number;
-  jobLevel?: JobLevel;
-  clearance?: number;
-  setFlags?: Record<string, boolean | string>;
-  unsetFlags?: string[];
-  addCooldown?: Record<string, number>;
-  endGame?: string;
-  logTitle?: string;
-  logDetail?: string;
-};
-
-export type EventChoice = {
-  label: string;
-  outcome: ChoiceEffect;
-};
-
-export type EventCard = {
-  id: string;
-  title: string;
-  arc: string;
-  text: string;
-  kind?: "regular" | "milestone" | "crisis";
-  conditions?: Conditions;
-  weight?: number;
-  cooldownTurns?: number;
-  once?: boolean;
-  priority?: number;
-  choices: {
-    yes: EventChoice;
-    no: EventChoice;
-  };
-};
-
-export type ResolvedTurn = {
-  state: GameState;
-  resolution: Resolution;
+export type GameState = {
+  stats: Stats;
+  resources: ResourceState;
+  flags: Record<string, boolean>;
+  timedEffects: TimedEffect[];
+  perks: string[];
+  turn: number;
+  currentEventId: string | null;
+  seenEvents: string[];
+  cooldowns: Record<string, number>;
+  resolution: Resolution | null;
+  lastCheckResult: CheckResult | null;
+  mode: UIMode;
+  gameOver: boolean;
+  ending?: string;
+  retirementScore: number | null;
+  lastUpgradeAtQuarter: number;
 };

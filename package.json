@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/engine.test.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
