@@ -1,5 +1,5 @@
 import { CARDS } from "./cards";
-import type { ChoiceEffect, EventCard, GameState, LogEntry, Stats } from "./types";
+import type { ChoiceEffect, EventCard, GameState, Resolution, Stats } from "./types";
 
 const STAT_KEYS: Array<keyof Stats> = ["tech", "stress", "health", "loyalty", "reputation", "money"];
 
@@ -21,23 +21,26 @@ export function createInitialState(): GameState {
     },
     flags: {},
     turn: 0,
+    mode: "event",
     eventId: null,
+    nextEventId: null,
     eventSeed: null,
     seenEvents: [],
     cooldowns: {},
-    log: [
-      {
-        title: "Начало",
-        detail: "Распределение в НИИ Вычислительных Машин только что оформлено.",
-      },
-    ],
+    resolution: {
+      title: "Начало",
+      detail: "Распределение в НИИ Вычислительных Машин только что оформлено.",
+      changes: [],
+    },
     gameOver: false,
   };
 
   const firstEvent = pickNextEvent(initialState);
   return {
     ...initialState,
+    mode: "event",
     eventId: firstEvent?.id ?? null,
+    nextEventId: null,
     eventSeed: firstEvent?.arc ?? null,
   };
 }
@@ -213,9 +216,6 @@ export function advanceTurn(state: GameState): GameState {
   next.turn += 1;
   next.counters.age += 1;
   next.counters.yearsOfService += 1;
-  next.stats.health = clampStat(next.stats.health - 1 + (next.stats.stress > 75 ? -1 : 0));
-  next.stats.stress = clampStat(next.stats.stress + (next.stats.health < 30 ? 2 : 1));
-  next.stats.money = clampStat(next.stats.money - 1);
 
   for (const [id, turns] of Object.entries(next.cooldowns)) {
     const updated = turns - 1;
@@ -229,11 +229,56 @@ export function advanceTurn(state: GameState): GameState {
   return next;
 }
 
+function formatDelta(value: number, positiveLabel = "+"): string {
+  return value > 0 ? `${positiveLabel}${value}` : `${value}`;
+}
+
+function buildChanges(effect: ChoiceEffect): string[] {
+  const changes: string[] = [];
+
+  for (const [key, value] of Object.entries(effect.stats ?? {})) {
+    if (typeof value === "number" && value !== 0) {
+      const label = STAT_LABELS[key as keyof Stats];
+      changes.push(`${label} ${formatDelta(value)}`);
+    }
+  }
+
+  if (typeof effect.age === "number" && effect.age !== 0) {
+    changes.push(`Возраст ${formatDelta(effect.age)}`);
+  }
+  if (typeof effect.yearsOfService === "number" && effect.yearsOfService !== 0) {
+    changes.push(`Стаж ${formatDelta(effect.yearsOfService)}`);
+  }
+  if (typeof effect.clearance === "number") {
+    changes.push(`Доступ ${effect.clearance}`);
+  }
+  if (effect.jobLevel) {
+    changes.push(`Должность ${effect.jobLevel}`);
+  }
+  for (const [key, value] of Object.entries(effect.setFlags ?? {})) {
+    changes.push(`Флаг ${key} = ${String(value)}`);
+  }
+  for (const key of effect.unsetFlags ?? []) {
+    changes.push(`Флаг ${key} снят`);
+  }
+
+  return changes;
+}
+
+const STAT_LABELS: Record<keyof Stats, string> = {
+  tech: "Компетенция",
+  stress: "Стресс",
+  health: "Здоровье",
+  loyalty: "Лояльность",
+  reputation: "Авторитет",
+  money: "Сбережения",
+};
+
 export function resolveChoice(
   state: GameState,
   card: EventCard,
   choiceKey: "yes" | "no",
-): { state: GameState; log: LogEntry } {
+): { state: GameState; resolution: Resolution } {
   const choice = card.choices[choiceKey];
   const afterEffect = applyEffect(state, {
     ...choice.outcome,
@@ -245,20 +290,15 @@ export function resolveChoice(
 
   const next = structuredClone(afterEffect) as GameState;
   next.seenEvents = Array.from(new Set([...next.seenEvents, card.id]));
-  next.log = [
-    {
-      title: choice.outcome.logTitle ?? card.title,
-      detail: choice.outcome.logDetail ?? card.text,
-    },
-    ...next.log,
-  ].slice(0, 8);
-
-  const log = next.log[0] ?? {
-    title: card.title,
-    detail: card.text,
+  const resolution: Resolution = {
+    title: choice.outcome.logTitle ?? card.title,
+    detail: choice.outcome.logDetail ?? card.text,
+    changes: buildChanges(choice.outcome),
   };
 
-  return { state: next, log };
+  next.resolution = resolution;
+
+  return { state: next, resolution };
 }
 
 export function useMilestoneJobPromotion(state: GameState): GameState {
@@ -266,17 +306,29 @@ export function useMilestoneJobPromotion(state: GameState): GameState {
   if (next.counters.age >= 25 && next.counters.jobLevel === "MNS") {
     next.counters.jobLevel = "SNS";
     next.counters.clearance = Math.max(next.counters.clearance, 2);
-    next.log = [{ title: "Повышение", detail: "Тебя переводят в СНС." }, ...next.log].slice(0, 8);
+    next.resolution = {
+      title: "Повышение",
+      detail: "Тебя переводят в СНС.",
+      changes: ["Должность SNS", "Доступ 2"],
+    };
   }
   if (next.counters.age >= 35 && next.counters.jobLevel === "SNS" && next.stats.reputation >= 45) {
     next.counters.jobLevel = "ZAVLAB";
     next.counters.clearance = Math.max(next.counters.clearance, 3);
-    next.log = [{ title: "Новая должность", detail: "Ты стал завлабом." }, ...next.log].slice(0, 8);
+    next.resolution = {
+      title: "Новая должность",
+      detail: "Ты стал завлабом.",
+      changes: ["Должность ZAVLAB", "Доступ 3"],
+    };
   }
   if (next.counters.age >= 50 && next.counters.jobLevel === "ZAVLAB" && next.stats.loyalty >= 55) {
     next.counters.jobLevel = "DIRECTOR";
     next.counters.clearance = Math.max(next.counters.clearance, 4);
-    next.log = [{ title: "Директорский этаж", detail: "Ты поднялся до руководства." }, ...next.log].slice(0, 8);
+    next.resolution = {
+      title: "Директорский этаж",
+      detail: "Ты поднялся до руководства.",
+      changes: ["Должность DIRECTOR", "Доступ 4"],
+    };
   }
   return next;
 }

@@ -16,18 +16,21 @@ export type GameState = {
   counters: Counters;
   flags: Flags;
   turn: number;
+  mode: "event" | "reveal" | "ended";
   eventId: string | null;
+  nextEventId: string | null;
   eventSeed: string | null;
   seenEvents: string[];
   cooldowns: Record<string, number>;
-  log: LogEntry[];
+  resolution: Resolution | null;
   gameOver: boolean;
   ending?: string;
 };
 
-export type LogEntry = {
+export type Resolution = {
   title: string;
   detail: string;
+  changes: string[];
 };
 
 export type Conditions = {
@@ -83,5 +86,5 @@ export type EventCard = {
 
 export type ResolvedTurn = {
   state: GameState;
-  log: LogEntry;
+  resolution: Resolution;
 };

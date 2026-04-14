@@ -231,7 +231,6 @@ export const CARDS: EventCard[] = [
         label: "Помочь",
         outcome: {
           stats: { reputation: 8, stress: 4, tech: 3, loyalty: 1 },
-          setFlags: { family_status: "married_to_nina" },
           logTitle: "Связи укреплены",
           logDetail: "В отделе стало немного теплее.",
         },
